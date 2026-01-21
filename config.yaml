@@ -1,0 +1,31 @@
+symbols:
+  - EURUSD
+  - GBPUSD
+  - USDJPY
+
+timeframe: H1
+
+session:
+  start: "06:00"
+  end: "20:00"
+
+sl_pct: 0.005
+tp_pct: 0.005
+equity_pct_per_trade: 0.02
+
+costs:
+  spread: 0.0002
+  slippage: 0.00005
+  commission_per_lot: 0.0
+
+mt5:
+  login: 0
+  password: ""
+  server: ""
+  path: ""
+
+mode: backtest
+
+data:
+  csv_dir: "data"
+  timezone: "Europe/Brussels"
