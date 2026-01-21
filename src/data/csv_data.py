@@ -39,32 +39,60 @@ class CSVDataLoader:
         self.timezone = timezone
 
     def load(self, symbol: str) -> pd.DataFrame:
-        """Load historical data for the given symbol.
+    file_path = self.csv_dir / f"{symbol}.csv"
+    if not file_path.exists():
+        raise FileNotFoundError(f"CSV file not found for symbol {symbol}: {file_path}")
 
-        Returns
-        -------
-        pandas.DataFrame
-            DataFrame indexed by timezone‑aware `Timestamp` with
-            columns `open`, `high`, `low`, `close`.  Any extra
-            columns in the CSV are preserved, but may be ignored by
-            the strategy.
-        """
-        file_path = self.csv_dir / f"{symbol}.csv"
-        if not file_path.exists():
-            raise FileNotFoundError(f"CSV file not found for symbol {symbol}: {file_path}")
+    # 1) Try "standard" CSV first: comma-separated with a single 'time' column
+    try:
+        df_std = pd.read_csv(file_path)
+        if "time" in df_std.columns:
+            df_std["time"] = pd.to_datetime(df_std["time"], errors="raise")
+            df_std = df_std.set_index("time").sort_index()
+            if df_std.index.tz is None:
+                df_std.index = df_std.index.tz_localize(self.timezone)
+            else:
+                df_std.index = df_std.index.tz_convert(self.timezone)
+            return df_std
+    except Exception:
+        pass  # fall back to MT5 format
 
-        df = pd.read_csv(file_path, parse_dates=['time'])
-        # Ensure required columns are present
-        for col in ['open', 'high', 'low', 'close']:
-            if col not in df.columns:
-                raise ValueError(f"CSV for {symbol} is missing required column '{col}'")
+    # 2) MT5 export format: tab-separated with <DATE> and <TIME>
+    df = pd.read_csv(file_path, sep="\t", engine="python")
+    df.columns = [c.strip() for c in df.columns]
 
-        df = df.set_index('time').sort_index()
+    required = ["<DATE>", "<TIME>", "<OPEN>", "<HIGH>", "<LOW>", "<CLOSE>"]
+    missing = [c for c in required if c not in df.columns]
+    if missing:
+        raise ValueError(
+            f"Unrecognized CSV format for {symbol}. Missing columns: {missing}. "
+            f"Found columns: {list(df.columns)}"
+        )
 
-        # Localise timestamps: if naive, interpret as timezone specified in config
-        if df.index.tzinfo is None or df.index.tz is None:
-            df.index = df.index.tz_localize(self.timezone)
-        else:
-            df.index = df.index.tz_convert(self.timezone)
+    dt = df["<DATE>"].astype(str).str.strip() + " " + df["<TIME>"].astype(str).str.strip()
+    ts = pd.to_datetime(dt, format="%Y.%m.%d %H:%M:%S", errors="coerce")
+    if ts.isna().any():
+        # fallback if format differs
+        ts = pd.to_datetime(dt, errors="coerce")
+    if ts.isna().any():
+        bad = dt[ts.isna()].head(5).tolist()
+        raise ValueError(f"Could not parse MT5 DATE/TIME for {symbol}. Examples: {bad}")
 
-        return df
+    out = pd.DataFrame(
+        {
+            "open": df["<OPEN>"].astype(float),
+            "high": df["<HIGH>"].astype(float),
+            "low": df["<LOW>"].astype(float),
+            "close": df["<CLOSE>"].astype(float),
+            # optional extras if you want them later:
+            # "tick_volume": df.get("<TICKVOL>", pd.Series([None]*len(df))).astype(float),
+            # "spread": df.get("<SPREAD>", pd.Series([None]*len(df))).astype(float),
+        },
+        index=pd.DatetimeIndex(ts),
+    ).sort_index()
+
+    # Important: MT5 export timestamps are usually "terminal/broker local time".
+    # For now we assume this matches Europe/Brussels, which fits your strategy definition.
+    out.index = out.index.tz_localize(self.timezone)
+
+    return out
