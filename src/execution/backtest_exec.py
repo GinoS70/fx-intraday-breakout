@@ -120,6 +120,7 @@ class BacktestEngine:
 
                 # If no open position, evaluate for new entry
                 if position is None:
+                    print("### DEBUG ###", symbol, next_ts)
                     signal, state = self.strategy.evaluate_bar(ts, bar, state)
                     if signal:
                         # Determine entry price at next bar open with spread and slippage
@@ -136,6 +137,7 @@ class BacktestEngine:
                             tp_price = entry_price * (1.0 - self.config.tp_pct)
                         # Calculate volume in units (approximate one unit per quote currency)
                         volume = (equity * self.config.equity_pct_per_trade) / open_price
+                        print(f"{symbol} {next_ts} signal={signal} volume={volume}")
                         # Record new position
                         position = Position(
                             symbol=symbol,

@@ -1,7 +1,5 @@
 symbols:
   - EURUSD
-  - GBPUSD
-  - USDJPY
 
 timeframe: H1
 
@@ -11,7 +9,7 @@ session:
 
 sl_pct: 0.005
 tp_pct: 0.005
-equity_pct_per_trade: 0.02
+equity_pct_per_trade: 0.2
 
 costs:
   spread: 0.0002
